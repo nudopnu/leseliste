@@ -1,4 +1,3 @@
-
 import json
 import subprocess
 import sys
@@ -8,99 +7,182 @@ from datetime import datetime
 
 def create_reading_list(topic: str):
     prompt = f"""
-Du bist ein wissenschaftlicher Rechercheassistent.
+Du bist mein persönlicher Lerncoach und technischer Mentor.
 
-Erstelle eine fundierte, didaktisch sinnvolle Leseliste
-zum folgenden wissenschaftlichen Thema:
+Ich möchte das folgende Thema wirklich verstehen und
+praktisch anwenden können:
 
 THEMA:
 {topic}
 
-ZIEL:
-Eine Person soll das Thema von den theoretischen Grundlagen
-bis zum Verständnis aktueller wissenschaftlicher Methoden
-systematisch erlernen können.
+DEINE ROLLE
 
-Erstelle ein JSON mit folgender Struktur:
+Stelle mir einen individuellen Lernpfad zusammen.
+Denke dabei wie ein guter Mentor, der mich Schritt für
+Schritt an ein Thema heranführt.
+
+Ich möchte nicht einfach eine akademische Literaturliste,
+sondern einen angenehmen, abwechslungsreichen und
+praxisorientierten Lernprozess.
+
+QUELLEN UND LERNMATERIALIEN
+
+Sei bei der Auswahl bewusst offen:
+
+- Praxisorientierte Fachbücher, z.B. von O'Reilly,
+  Manning, No Starch Press oder Addison-Wesley.
+- Gute technische Blogs und Tutorials.
+- Offizielle Dokumentationen.
+- Online-Kurse und interaktive Lernressourcen.
+- GitHub-Repositories und praktische Beispiele.
+- Wissenschaftliche Paper, wenn sie wirklich wichtig sind.
+- Surveys und Übersichtsarbeiten, wenn sie beim Einstieg helfen.
+- Einzelne Buchkapitel oder Paper-Sektionen, wenn nicht
+  das gesamte Werk gelesen werden muss.
+
+Bevorzuge gut geschriebene, verständliche und didaktisch
+starke Materialien.
+
+Ein gutes Buch oder Tutorial ist mir häufig lieber als
+fünf schwer verständliche wissenschaftliche Paper.
+
+LERNDIDAKTIK
+
+Baue den Lernpfad so auf, dass ich kontinuierlich Fortschritte
+mache und nicht von Anfang an mit komplexer Theorie
+überfordert werde.
+
+Orientiere dich an dieser Struktur:
+
+1. Einstieg:
+   Was ist das Thema? Warum ist es relevant?
+   Welche grundlegenden Konzepte sollte ich kennen?
+
+2. Grundlagen:
+   Verständliche Bücher, Tutorials und Erklärungen.
+
+3. Praktischer Einstieg:
+   Erste kleine Projekte, Experimente oder Übungen.
+
+4. Vertiefung:
+   Fortgeschrittene Konzepte, technische Hintergründe
+   und ausgewählte wissenschaftliche Arbeiten.
+
+5. Expertenwissen:
+   Aktuelle Forschungsansätze, offene Probleme und
+   weiterführende Ressourcen.
+
+Passe diese Struktur an das jeweilige Thema an.
+Nicht jedes Thema benötigt alle fünf Phasen.
+
+COACHING
+
+Ich möchte nicht nur lesen, sondern verstehen.
+
+Erstelle deshalb zu jeder wichtigen Ressource:
+
+- Warum sollte ich sie lesen oder durcharbeiten?
+- Was sollte ich daraus mitnehmen?
+- Welche Kapitel, Abschnitte oder Seiten sind besonders relevant?
+- Was kann ich überspringen?
+- Welche praktischen Übungen bieten sich an?
+- Welche Verständnisfragen sollte ich beantworten können?
+
+Formuliere mindestens drei Verständnisfragen pro
+wichtiger Ressource und gib jeweils eine ausführliche
+Musterantwort.
+
+Die Fragen sollen zum Nachdenken anregen und Zusammenhänge
+prüfen, nicht nur Definitionen abfragen.
+
+QUALITÄT DER QUELLEN
+
+- Verwende möglichst aktuelle und etablierte Ressourcen.
+- Bevorzuge nachvollziehbare, tatsächlich existierende Quellen.
+- Erfinde keine Titel, Autoren, Veröffentlichungsjahre,
+  Kapitel oder URLs.
+- Verlinke Quellen möglichst direkt.
+- Kennzeichne Unsicherheiten transparent.
+- Unterscheide zwischen verifizierten und nicht verifizierten
+  Kapitel- und Abschnittsangaben.
+- Achte auf einen guten Mix aus Theorie und Praxis.
+
+JSON-AUSGABE
+
+Gib ausschließlich gültiges JSON zurück.
+Keine Markdown-Codeblöcke und keine Erklärungen
+außerhalb des JSON.
+
+Verwende folgende Struktur:
 
 {{
   "topic": "Thema",
-  "learning_objectives": [
-    "Lernziel 1"
-  ],
-  "reading_list": [
+  "introduction": "Kurze Einführung und Einordnung",
+  "learning_objectives": [],
+  "assumed_knowledge": [],
+  "learning_path": [
     {{
-      "order": 1,
-      "type": "paper",
-      "title": "Titel",
-      "authors": ["Autor 1"],
-      "year": 2024,
-      "source": "Journal oder Konferenz",
-      "doi": null,
-      "url": null,
-      "priority": "essential",
-      "estimated_hours": 3,
-      "reason": "Warum ist diese Quelle relevant?",
-      "sections": [
+      "phase": 1,
+      "title": "Einstieg",
+      "description": "Was ich in dieser Phase lernen soll",
+      "resources": [
         {{
-          "name": "Kapitel oder Sektion",
-          "focus": "Was soll hier gelernt werden?"
+          "type": "book",
+          "title": "Titel",
+          "authors": [],
+          "publisher": null,
+          "year": null,
+          "url": null,
+          "priority": "essential",
+          "estimated_hours": 3,
+          "reason": "Warum diese Ressource hilfreich ist",
+          "recommended_sections": [
+            {{
+              "name": "Kapitel oder Abschnitt",
+              "focus": "Worauf ich achten soll",
+              "verified": false
+            }}
+          ],
+          "takeaways": [],
+          "practical_exercises": [],
+          "understanding_questions": [
+            {{
+              "question": "Frage",
+              "answer": "Ausführliche Musterantwort"
+            }}
+          ]
         }}
       ],
-      "prerequisites": [],
-      "understanding_questions": [
-        {{
-          "question": "Verständnisfrage",
-          "answer": "Ausführliche Musterantwort"
-        }}
-      ]
+      "milestone": "Woran ich erkenne, dass ich diese Phase verstanden habe"
     }}
-  ]
+  ],
+  "final_project_ideas": [],
+  "further_exploration": [],
+  "glossary": []
 }}
 
-ANFORDERUNGEN:
+WEITERE REGELN
 
-1. Erstelle eine Lernreihenfolge vom Grundlagenwissen
-   bis zu fortgeschrittenen Forschungsarbeiten.
+- Verwende für type passende Werte wie:
+  book, blog, tutorial, documentation, course,
+  paper, repository oder video.
+- priority kann essential, recommended oder optional sein.
+- Plane lieber wenige gute Ressourcen als eine riesige Liste.
+- Passe die Schwierigkeit an einen Lernenden an, der
+  das Thema systematisch erschließen möchte.
+- Erkläre Fachbegriffe, wenn sie erstmals auftauchen.
+- Gib mir einen roten Faden durch die Materialien.
+- Achte darauf, dass die Lernzeit realistisch bleibt.
+- Die Antworten auf Verständnisfragen sollen fachlich
+  fundiert und verständlich sein.
+- Gib keine erfundenen URLs aus.
+- Bevorzuge eine Mischung aus Lesen, Ausprobieren und
+  eigenständigem Erklären.
 
-2. Berücksichtige:
-   - Grundlagenbücher
-   - wissenschaftliche Paper
-   - relevante Surveys und Reviews
-   - gegebenenfalls einzelne Buchkapitel
-   - wichtige ergänzende Forschungsarbeiten
-
-3. Bevorzuge echte, veröffentlichte wissenschaftliche Quellen.
-   Erfinde niemals Titel, Autoren, DOI oder URLs.
-
-4. Wenn möglich, gib direkte DOI- oder Verlagslinks an.
-
-5. Nenne konkrete Kapitel oder Sektionen, die gelesen
-   werden sollten. Wenn die Gliederung nicht verifiziert
-   werden kann, kennzeichne sie entsprechend.
-
-6. Jede Quelle benötigt mindestens drei
-   Verständnisfragen mit ausführlichen Antworten.
-
-7. Die Fragen sollen nicht nur Fakten abfragen,
-   sondern das konzeptionelle Verständnis prüfen.
-
-8. Die Leseliste soll aufeinander aufbauen.
-   Erkläre die Abhängigkeiten zwischen den Quellen.
-
-9. Unterscheide zwischen:
-   - essential
-   - recommended
-   - optional
-
-10. Gib ausschließlich gültiges JSON zurück.
-    Keine Markdown-Codeblöcke und keine Erklärungen
-    außerhalb des JSON.
-
-WICHTIG:
-Recherchiere sorgfältig. Qualität und Verlässlichkeit
-sind wichtiger als die Anzahl der Quellen.
-"""
+Dein Ziel ist nicht, möglichst viele Quellen aufzulisten.
+Dein Ziel ist, mich tatsächlich in die Lage zu versetzen,
+das Thema zu verstehen und selbstständig damit zu arbeiten.
+    """
 
     print(f"Erstelle Leseliste für: {topic}")
     print("Claude wird gestartet ...")
@@ -110,7 +192,8 @@ sind wichtiger als die Anzahl der Quellen.
             "claude",
             "-p",
             "--output-format", "text",
-            "--tools", "WebSearch,WebFetch"
+            "--tools", "WebSearch,WebFetch",
+            "--allowedTools", "WebSearch,WebFetch",
         ],
         input=prompt,
         capture_output=True,
@@ -122,20 +205,31 @@ sind wichtiger als die Anzahl der Quellen.
     if result.returncode != 0:
         raise RuntimeError(result.stderr)
 
-    # JSON aus der Antwort lesen
-    data = json.loads(result.stdout.strip())
-
     # Ausgabeordner erstellen
     output_dir = Path("leselisten")
     output_dir.mkdir(exist_ok=True)
 
-    # Dateinamen aus Thema und Zeitstempel
-    filename = (
-        f"leseliste_"
-        f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    )
+    # Dateinamen aus Zeitstempel
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    output_file = output_dir / f"leseliste_{timestamp}.json"
+    raw_file = output_dir / f"leseliste_{timestamp}_raw.txt"
 
-    output_file = output_dir / filename
+    # Rohantwort sichern, damit nichts verloren geht
+    text = result.stdout.strip()
+    raw_file.write_text(text, encoding="utf-8")
+
+    # JSON aus der Antwort lesen (toleriert Codeblöcke/Text drumherum)
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end == -1:
+        raise RuntimeError(
+            f"Keine JSON-Antwort erhalten. Rohantwort: {raw_file.resolve()}"
+        )
+    try:
+        data = json.loads(text[start:end + 1])
+    except json.JSONDecodeError as error:
+        raise RuntimeError(
+            f"Ungültiges JSON ({error}). Rohantwort: {raw_file.resolve()}"
+        ) from error
 
     # JSON speichern
     output_file.write_text(
@@ -149,12 +243,16 @@ sind wichtiger als die Anzahl der Quellen.
 
     print("\nLeseliste erfolgreich erstellt!")
     print(f"Datei: {output_file.resolve()}")
-    print(f"Anzahl Quellen: {len(data.get('reading_list', []))}")
+    count = sum(
+        len(phase.get("resources", []))
+        for phase in data.get("learning_path", [])
+    )
+    print(f"Anzahl Quellen: {count}")
 
 
-if __name__ == "__main__":
+def main():
     if len(sys.argv) < 2:
-        print('Verwendung: python leseliste.py "Dein Thema"')
+        print('Verwendung: leseliste "Dein Thema"')
         sys.exit(1)
 
     topic = " ".join(sys.argv[1:])
@@ -164,3 +262,7 @@ if __name__ == "__main__":
     except Exception as error:
         print(f"\nFehler: {error}")
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
