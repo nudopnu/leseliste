@@ -1,8 +1,162 @@
 import json
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 from datetime import datetime
+
+
+def _describe_tool_use(block: dict) -> str:
+    """Kurze, lesbare Beschreibung eines Tool-Aufrufs."""
+    name = block.get("name", "?")
+    tool_input = block.get("input", {})
+    if name == "WebSearch":
+        return f"Suche: {tool_input.get('query', '')}"
+    if name == "WebFetch":
+        return f"Lese:  {tool_input.get('url', '')}"
+    return f"Tool:  {name}"
+
+
+def run_claude(prompt: str, timeout: int = 900) -> str:
+    """Startet Claude, zeigt den Fortschritt live an und gibt den Ergebnistext zurück."""
+    process = subprocess.Popen(
+        [
+            "claude",
+            "-p",
+            "--output-format", "stream-json",
+            "--verbose",
+            "--include-partial-messages",
+            "--tools", "WebSearch,WebFetch",
+            "--allowedTools", "WebSearch,WebFetch",
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    # stderr parallel einsammeln, damit der Prozess nicht blockiert
+    stderr_lines: list[str] = []
+    stderr_thread = threading.Thread(
+        target=lambda: stderr_lines.extend(process.stderr), daemon=True
+    )
+    stderr_thread.start()
+
+    # Nach Ablauf des Timeouts den Prozess beenden
+    timed_out = threading.Event()
+
+    def _kill():
+        timed_out.set()
+        process.kill()
+
+    timer = threading.Timer(timeout, _kill)
+    timer.start()
+
+    process.stdin.write(prompt)
+    process.stdin.close()
+
+    start = time.monotonic()
+    final_event = None
+
+    # Status für die sich aktualisierende Fortschrittszeile
+    status_label = None   # "schreibt" oder "denkt nach"
+    status_chars = 0
+    status_open = False   # steht gerade eine Zeile ohne Zeilenumbruch da?
+    last_update = 0.0
+
+    def elapsed() -> str:
+        return f"[{int(time.monotonic() - start):>4}s]"
+
+    def show_status(force: bool = False):
+        nonlocal status_open, last_update
+        now = time.monotonic()
+        if not force and now - last_update < 1:
+            return
+        last_update = now
+        print(
+            f"\r{elapsed()} Claude {status_label} ... {status_chars:,} Zeichen".replace(",", "."),
+            end="", flush=True,
+        )
+        status_open = True
+
+    def println(message: str):
+        nonlocal status_open
+        if status_open:
+            print()
+            status_open = False
+        print(f"{elapsed()} {message}", flush=True)
+
+    try:
+        for line in process.stdout:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            event_type = event.get("type")
+
+            if event_type == "stream_event":
+                inner = event.get("event", {})
+                inner_type = inner.get("type")
+                if inner_type == "content_block_start":
+                    block_type = inner.get("content_block", {}).get("type")
+                    if block_type in ("text", "thinking"):
+                        if status_open:
+                            print()
+                            status_open = False
+                        status_label = "schreibt" if block_type == "text" else "denkt nach"
+                        status_chars = 0
+                        show_status(force=True)
+                elif inner_type == "content_block_delta":
+                    delta = inner.get("delta", {})
+                    piece = delta.get("text") or delta.get("thinking") or ""
+                    if piece and status_label:
+                        status_chars += len(piece)
+                        show_status()
+                elif inner_type == "content_block_stop" and status_label:
+                    show_status(force=True)
+                    status_label = None
+
+            elif event_type == "assistant":
+                for block in event.get("message", {}).get("content", []):
+                    if block.get("type") == "tool_use":
+                        println(_describe_tool_use(block))
+
+            elif event_type == "result":
+                final_event = event
+    finally:
+        if status_open:
+            print()
+        timer.cancel()
+        process.wait()
+        stderr_thread.join(timeout=5)
+
+    if timed_out.is_set():
+        raise RuntimeError(f"Abbruch nach {timeout} Sekunden (Timeout).")
+
+    if final_event is None:
+        raise RuntimeError(
+            f"Kein Ergebnis von Claude erhalten (Exit-Code {process.returncode}).\n"
+            + "".join(stderr_lines)
+        )
+
+    if final_event.get("is_error"):
+        raise RuntimeError(
+            f"Claude meldet einen Fehler ({final_event.get('subtype')}): "
+            f"{final_event.get('result', '')}"
+        )
+
+    duration = time.monotonic() - start
+    turns = final_event.get("num_turns", "?")
+    print(f"\nFertig nach {duration:.0f}s, {turns} Schritte.")
+
+    return (final_event.get("result") or "").strip()
 
 
 def create_reading_list(topic: str):
@@ -187,23 +341,7 @@ das Thema zu verstehen und selbstständig damit zu arbeiten.
     print(f"Erstelle Leseliste für: {topic}")
     print("Claude wird gestartet ...")
 
-    result = subprocess.run(
-        [
-            "claude",
-            "-p",
-            "--output-format", "text",
-            "--tools", "WebSearch,WebFetch",
-            "--allowedTools", "WebSearch,WebFetch",
-        ],
-        input=prompt,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        timeout=900
-    )
-
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr)
+    text = run_claude(prompt, timeout=900)
 
     # Ausgabeordner erstellen
     output_dir = Path("leselisten")
@@ -215,7 +353,6 @@ das Thema zu verstehen und selbstständig damit zu arbeiten.
     raw_file = output_dir / f"leseliste_{timestamp}_raw.txt"
 
     # Rohantwort sichern, damit nichts verloren geht
-    text = result.stdout.strip()
     raw_file.write_text(text, encoding="utf-8")
 
     # JSON aus der Antwort lesen (toleriert Codeblöcke/Text drumherum)
