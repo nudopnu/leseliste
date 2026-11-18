@@ -7,10 +7,13 @@ authors = [
     { name = "ptsc4816888908", email = "ptsc4816@hochschule-trier.de" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pywebview>=6.2.1",
+]
 
 [project.scripts]
 leseliste = "leseliste:main"
+leseliste-ui = "leseliste.ui:main"
 
 [build-system]
 requires = ["uv_build>=0.12.23,<0.13.0"]

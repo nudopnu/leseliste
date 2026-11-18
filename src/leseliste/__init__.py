@@ -5,6 +5,14 @@ import threading
 import time
 from pathlib import Path
 from datetime import datetime
+from typing import Callable
+
+
+ProgressCallback = Callable[[dict], None]
+
+
+class CancelledError(Exception):
+    """Der Lauf wurde vom Benutzer abgebrochen."""
 
 
 def _describe_tool_use(block: dict) -> str:
@@ -18,8 +26,23 @@ def _describe_tool_use(block: dict) -> str:
     return f"Tool:  {name}"
 
 
-def run_claude(prompt: str, timeout: int = 900) -> str:
-    """Startet Claude, zeigt den Fortschritt live an und gibt den Ergebnistext zurück."""
+def run_claude(
+    prompt: str,
+    timeout: int = 900,
+    on_progress: ProgressCallback | None = None,
+    cancel_event: threading.Event | None = None,
+) -> str:
+    """Startet Claude und gibt den Ergebnistext zurück.
+
+    Fortschritt wird als Dict an ``on_progress`` gemeldet:
+      {"type": "tool",   "elapsed": s, "text": "Suche: ..."}
+      {"type": "status", "elapsed": s, "label": "schreibt", "chars": n}
+      {"type": "done",   "elapsed": s, "turns": n}
+    Wird ``cancel_event`` gesetzt, bricht der Lauf ab.
+    """
+    emit = on_progress or (lambda event: None)
+    cancel_event = cancel_event or threading.Event()
+
     process = subprocess.Popen(
         [
             "claude",
@@ -36,6 +59,7 @@ def run_claude(prompt: str, timeout: int = 900) -> str:
         text=True,
         encoding="utf-8",
         errors="replace",
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
 
     # stderr parallel einsammeln, damit der Prozess nicht blockiert
@@ -45,49 +69,45 @@ def run_claude(prompt: str, timeout: int = 900) -> str:
     )
     stderr_thread.start()
 
-    # Nach Ablauf des Timeouts den Prozess beenden
-    timed_out = threading.Event()
+    start = time.monotonic()
 
-    def _kill():
-        timed_out.set()
-        process.kill()
+    def elapsed() -> int:
+        return int(time.monotonic() - start)
 
-    timer = threading.Timer(timeout, _kill)
-    timer.start()
+    # Wächter: beendet den Prozess bei Timeout oder Abbruch
+    stop_reason: list[str] = []
+
+    def _watchdog():
+        while process.poll() is None:
+            if cancel_event.is_set():
+                stop_reason.append("cancel")
+                process.kill()
+                return
+            if time.monotonic() - start > timeout:
+                stop_reason.append("timeout")
+                process.kill()
+                return
+            time.sleep(0.25)
+
+    watchdog = threading.Thread(target=_watchdog, daemon=True)
+    watchdog.start()
 
     process.stdin.write(prompt)
     process.stdin.close()
 
-    start = time.monotonic()
     final_event = None
-
-    # Status für die sich aktualisierende Fortschrittszeile
     status_label = None   # "schreibt" oder "denkt nach"
     status_chars = 0
-    status_open = False   # steht gerade eine Zeile ohne Zeilenumbruch da?
-    last_update = 0.0
+    last_status = 0.0
 
-    def elapsed() -> str:
-        return f"[{int(time.monotonic() - start):>4}s]"
-
-    def show_status(force: bool = False):
-        nonlocal status_open, last_update
+    def emit_status(force: bool = False):
+        nonlocal last_status
         now = time.monotonic()
-        if not force and now - last_update < 1:
+        if not force and now - last_status < 1:
             return
-        last_update = now
-        print(
-            f"\r{elapsed()} Claude {status_label} ... {status_chars:,} Zeichen".replace(",", "."),
-            end="", flush=True,
-        )
-        status_open = True
-
-    def println(message: str):
-        nonlocal status_open
-        if status_open:
-            print()
-            status_open = False
-        print(f"{elapsed()} {message}", flush=True)
+        last_status = now
+        emit({"type": "status", "elapsed": elapsed(),
+              "label": status_label, "chars": status_chars})
 
     try:
         for line in process.stdout:
@@ -107,37 +127,36 @@ def run_claude(prompt: str, timeout: int = 900) -> str:
                 if inner_type == "content_block_start":
                     block_type = inner.get("content_block", {}).get("type")
                     if block_type in ("text", "thinking"):
-                        if status_open:
-                            print()
-                            status_open = False
                         status_label = "schreibt" if block_type == "text" else "denkt nach"
                         status_chars = 0
-                        show_status(force=True)
+                        emit_status(force=True)
                 elif inner_type == "content_block_delta":
                     delta = inner.get("delta", {})
                     piece = delta.get("text") or delta.get("thinking") or ""
                     if piece and status_label:
                         status_chars += len(piece)
-                        show_status()
+                        emit_status()
                 elif inner_type == "content_block_stop" and status_label:
-                    show_status(force=True)
+                    emit_status(force=True)
                     status_label = None
 
             elif event_type == "assistant":
                 for block in event.get("message", {}).get("content", []):
                     if block.get("type") == "tool_use":
-                        println(_describe_tool_use(block))
+                        emit({"type": "tool", "elapsed": elapsed(),
+                              "text": _describe_tool_use(block)})
 
             elif event_type == "result":
                 final_event = event
     finally:
-        if status_open:
-            print()
-        timer.cancel()
         process.wait()
+        watchdog.join(timeout=1)
         stderr_thread.join(timeout=5)
 
-    if timed_out.is_set():
+    if "cancel" in stop_reason:
+        raise CancelledError("Vom Benutzer abgebrochen.")
+
+    if "timeout" in stop_reason:
         raise RuntimeError(f"Abbruch nach {timeout} Sekunden (Timeout).")
 
     if final_event is None:
@@ -152,14 +171,59 @@ def run_claude(prompt: str, timeout: int = 900) -> str:
             f"{final_event.get('result', '')}"
         )
 
-    duration = time.monotonic() - start
-    turns = final_event.get("num_turns", "?")
-    print(f"\nFertig nach {duration:.0f}s, {turns} Schritte.")
+    emit({"type": "done", "elapsed": elapsed(),
+          "turns": final_event.get("num_turns", "?")})
 
     return (final_event.get("result") or "").strip()
 
 
-def create_reading_list(topic: str):
+class ConsoleProgress:
+    """Gibt Fortschritts-Events im Terminal aus (Statuszeile überschreibt sich)."""
+
+    def __init__(self):
+        self.status_open = False
+        self.status_label = None
+
+    def _close_status(self):
+        if self.status_open:
+            print()
+            self.status_open = False
+
+    def __call__(self, event: dict):
+        stamp = f"[{event['elapsed']:>4}s]"
+        if event["type"] == "status":
+            if event["label"] != self.status_label:
+                self._close_status()
+                self.status_label = event["label"]
+            chars = f"{event['chars']:,}".replace(",", ".")
+            line = f"{stamp} Claude {event['label']} ... {chars} Zeichen"
+            print(f"\r{line:<60}", end="", flush=True)
+            self.status_open = True
+        elif event["type"] == "tool":
+            self._close_status()
+            print(f"{stamp} {event['text']}", flush=True)
+        elif event["type"] == "done":
+            self._close_status()
+            print(f"\nFertig nach {event['elapsed']}s, {event['turns']} Schritte.")
+
+
+OUTPUT_DIR = Path("leselisten")
+
+
+def count_resources(data: dict) -> int:
+    return sum(
+        len(phase.get("resources", []))
+        for phase in data.get("learning_path", [])
+    )
+
+
+def create_reading_list(
+    topic: str,
+    on_progress: ProgressCallback | None = None,
+    cancel_event: threading.Event | None = None,
+    output_dir: Path = OUTPUT_DIR,
+) -> Path:
+    """Erstellt eine Leseliste und gibt den Pfad der gespeicherten JSON-Datei zurück."""
     prompt = f"""
 Du bist mein persönlicher Lerncoach und technischer Mentor.
 
@@ -338,13 +402,14 @@ Dein Ziel ist, mich tatsächlich in die Lage zu versetzen,
 das Thema zu verstehen und selbstständig damit zu arbeiten.
     """
 
-    print(f"Erstelle Leseliste für: {topic}")
-    print("Claude wird gestartet ...")
-
-    text = run_claude(prompt, timeout=900)
+    text = run_claude(
+        prompt,
+        timeout=900,
+        on_progress=on_progress,
+        cancel_event=cancel_event,
+    )
 
     # Ausgabeordner erstellen
-    output_dir = Path("leselisten")
     output_dir.mkdir(exist_ok=True)
 
     # Dateinamen aus Zeitstempel
@@ -378,13 +443,7 @@ das Thema zu verstehen und selbstständig damit zu arbeiten.
         encoding="utf-8"
     )
 
-    print("\nLeseliste erfolgreich erstellt!")
-    print(f"Datei: {output_file.resolve()}")
-    count = sum(
-        len(phase.get("resources", []))
-        for phase in data.get("learning_path", [])
-    )
-    print(f"Anzahl Quellen: {count}")
+    return output_file
 
 
 def main():
@@ -394,8 +453,18 @@ def main():
 
     topic = " ".join(sys.argv[1:])
 
+    print(f"Erstelle Leseliste für: {topic}")
+    print("Claude wird gestartet ...")
+
     try:
-        create_reading_list(topic)
+        output_file = create_reading_list(topic, on_progress=ConsoleProgress())
+        data = json.loads(output_file.read_text(encoding="utf-8"))
+        print("\nLeseliste erfolgreich erstellt!")
+        print(f"Datei: {output_file.resolve()}")
+        print(f"Anzahl Quellen: {count_resources(data)}")
+    except KeyboardInterrupt:
+        print("\nAbgebrochen.")
+        sys.exit(130)
     except Exception as error:
         print(f"\nFehler: {error}")
         sys.exit(1)

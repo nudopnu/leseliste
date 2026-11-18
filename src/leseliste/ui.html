@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leseliste</title>
+<style>
+  :root {
+    --bg: #f6f5f2;
+    --panel: #ffffff;
+    --sidebar: #efede8;
+    --text: #1f1e1c;
+    --muted: #6b6862;
+    --line: #dedbd4;
+    --accent: #2f5d8a;
+    --accent-soft: #e3ecf5;
+    --essential: #a6372b;
+    --essential-soft: #f7e4e1;
+    --recommended: #2f6b45;
+    --recommended-soft: #e1f0e6;
+    --optional: #6b6862;
+    --optional-soft: #ebe9e4;
+    --warn: #8a6100;
+    --warn-soft: #f8efd7;
+    --code: #edebe6;
+    --shadow: 0 1px 2px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1b1a;
+      --panel: #242423;
+      --sidebar: #202020;
+      --text: #ebe9e4;
+      --muted: #a29f98;
+      --line: #3a3937;
+      --accent: #8db6de;
+      --accent-soft: #2a3644;
+      --essential: #f0a196;
+      --essential-soft: #44291f;
+      --recommended: #93d1a6;
+      --recommended-soft: #22382a;
+      --optional: #b5b2ab;
+      --optional-soft: #34332f;
+      --warn: #e8c46a;
+      --warn-soft: #3d3420;
+      --code: #333230;
+      --shadow: none;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font: 15px/1.55 "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    overflow: hidden;
+  }
+  button, input { font: inherit; color: inherit; }
+  a { color: var(--accent); }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
+
+  /* ---------- Sidebar ---------- */
+  aside {
+    background: var(--sidebar);
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    min-height: 0;
+  }
+  .new {
+    padding: 18px 16px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .new h1 { font-size: 17px; margin: 0 0 12px; letter-spacing: .01em; }
+  .new textarea {
+    width: 100%; min-height: 76px; resize: vertical;
+    padding: 9px 11px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--text);
+    font: inherit;
+  }
+  .new textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .btn {
+    border: 1px solid var(--line); background: var(--panel);
+    border-radius: 8px; padding: 7px 14px; cursor: pointer;
+  }
+  .btn:hover { border-color: var(--muted); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn:disabled { opacity: .5; cursor: default; filter: none; }
+  .new .row { display: flex; gap: 8px; margin-top: 10px; }
+  .new .row .primary { flex: 1; }
+
+  .list-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 16px 6px; color: var(--muted); font-size: 12px;
+    text-transform: uppercase; letter-spacing: .06em; font-weight: 600;
+  }
+  .list-head button { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 12px; padding: 2px 4px; }
+  .list-head button:hover { color: var(--text); }
+  #lists { overflow-y: auto; padding: 0 8px 12px; flex: 1; }
+  .item {
+    display: block; width: 100%; text-align: left;
+    background: none; border: none; border-radius: 8px;
+    padding: 9px 10px; cursor: pointer; margin-bottom: 2px;
+  }
+  .item:hover { background: var(--line); }
+  .item.active { background: var(--panel); box-shadow: var(--shadow); }
+  .item .t { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 500; }
+  .item .m { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .empty-list { color: var(--muted); padding: 8px 10px; font-size: 13.5px; }
+
+  /* ---------- Main ---------- */
+  main { overflow-y: auto; min-height: 0; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 32px 40px 80px; }
+  .placeholder { color: var(--muted); text-align: center; margin-top: 18vh; }
+  .placeholder h2 { color: var(--text); font-weight: 600; }
+
+  /* Fortschritt */
+  .progress h2 { margin: 0 0 4px; font-size: 22px; }
+  .progress .topic { color: var(--muted); margin-bottom: 20px; }
+  .statusbar {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; box-shadow: var(--shadow);
+  }
+  .spinner {
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 2.5px solid var(--line); border-top-color: var(--accent);
+    animation: spin .9s linear infinite; flex: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .statusbar .label { flex: 1; }
+  .statusbar .time { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .log { list-style: none; padding: 0; margin: 18px 0 0; font-size: 14px; }
+  .log li { display: flex; gap: 12px; padding: 5px 2px; border-bottom: 1px solid var(--line); }
+  .log .s { color: var(--muted); font-variant-numeric: tabular-nums; width: 44px; text-align: right; flex: none; }
+  .log .k { color: var(--muted); width: 48px; flex: none; }
+  .log .v { word-break: break-word; }
+  .error-box {
+    background: var(--essential-soft); color: var(--essential);
+    border-radius: 10px; padding: 14px 16px; white-space: pre-wrap; word-break: break-word;
+  }
+  .note-box { background: var(--optional-soft); border-radius: 10px; padding: 14px 16px; }
+
+  /* Leseliste */
+  .doc-head h2 { font-size: 26px; line-height: 1.25; margin: 0 0 10px; }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--muted); font-size: 13.5px; margin-bottom: 18px; }
+  .meta-row button { background: none; border: none; color: var(--accent); cursor: pointer; padding: 0; font-size: 13.5px; }
+  .intro { font-size: 16px; }
+  .toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 22px 0 8px; }
+  .toc button {
+    border: 1px solid var(--line); background: var(--panel); border-radius: 999px;
+    padding: 4px 12px; cursor: pointer; font-size: 13px;
+  }
+  .toc button:hover { border-color: var(--accent); color: var(--accent); }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; box-shadow: var(--shadow);
+  }
+  .card h3 { margin: 0 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .card ul { margin: 0; padding-left: 20px; }
+  .card li + li { margin-top: 4px; }
+
+  section.phase { margin-top: 44px; scroll-margin-top: 16px; }
+  .phase-head { display: flex; gap: 14px; align-items: baseline; }
+  .phase-num {
+    flex: none; width: 30px; height: 30px; border-radius: 50%;
+    background: var(--accent-soft); color: var(--accent);
+    display: grid; place-items: center; font-weight: 700; font-size: 14px;
+    transform: translateY(-2px);
+  }
+  .phase-head h2 { margin: 0; font-size: 21px; line-height: 1.3; }
+  .phase-desc { color: var(--muted); margin: 6px 0 16px 44px; }
+
+  .res { margin: 0 0 16px 44px; }
+  .res-top { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .badge {
+    font-size: 11.5px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 999px; background: var(--optional-soft); color: var(--optional);
+  }
+  .badge.essential { background: var(--essential-soft); color: var(--essential); }
+  .badge.recommended { background: var(--recommended-soft); color: var(--recommended); }
+  .badge.type { background: var(--accent-soft); color: var(--accent); }
+  .res-top .hours { color: var(--muted); font-size: 13px; margin-left: auto; }
+  .res h4 { margin: 0; font-size: 17px; line-height: 1.35; }
+  .res h4 a { text-decoration: none; }
+  .res h4 a:hover { text-decoration: underline; }
+  .byline { color: var(--muted); font-size: 13.5px; margin-top: 2px; }
+  .reason { margin: 10px 0 0; }
+  .sub { margin-top: 14px; }
+  .sub h5 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .sub ul { margin: 0; padding-left: 20px; }
+  .sub li + li { margin-top: 3px; }
+  .sections li .focus { color: var(--muted); }
+  .unverified { font-size: 11.5px; color: var(--warn); background: var(--warn-soft); border-radius: 4px; padding: 0 6px; margin-left: 6px; white-space: nowrap; }
+
+  details.q { border-top: 1px solid var(--line); padding: 8px 0; }
+  details.q:last-child { border-bottom: 1px solid var(--line); }
+  details.q summary { cursor: pointer; font-weight: 500; list-style: none; display: flex; gap: 8px; }
+  details.q summary::-webkit-details-marker { display: none; }
+  details.q summary::before { content: "▸"; color: var(--muted); transition: transform .15s; flex: none; }
+  details.q[open] summary::before { transform: rotate(90deg); }
+  details.q .a { margin: 8px 0 4px 18px; padding: 10px 14px; background: var(--bg); border-radius: 8px; }
+
+  .milestone {
+    margin: 4px 0 0 44px; padding: 12px 16px; border-left: 3px solid var(--recommended);
+    background: var(--recommended-soft); border-radius: 0 8px 8px 0;
+  }
+  .milestone b { color: var(--recommended); }
+
+  .final { margin-top: 48px; }
+  .final > h2 { font-size: 21px; margin: 0 0 14px; }
+  dl.glossary { margin: 0; }
+  dl.glossary dt { font-weight: 600; margin-top: 10px; }
+  dl.glossary dt:first-child { margin-top: 0; }
+  dl.glossary dd { margin: 2px 0 0; color: var(--muted); }
+
+  @media (max-width: 1000px) {
+    .cols { grid-template-columns: 1fr; }
+    .wrap { padding: 24px 24px 60px; }
+  }
+</style>
+</head>
+<body>
+<aside>
+  <div class="new">
+    <h1>Leseliste</h1>
+    <textarea id="topic" placeholder="Thema, Paper-Titel oder Fragestellung …"></textarea>
+    <div class="row">
+      <button class="btn primary" id="startBtn">Leseliste erstellen</button>
+    </div>
+  </div>
+  <div class="list-head">
+    <span>Gespeichert</span>
+    <span>
+      <button id="refreshBtn" title="Liste neu laden">Aktualisieren</button>
+      <button id="folderBtn" title="Ordner im Explorer öffnen">Ordner</button>
+    </span>
+  </div>
+  <div id="lists"></div>
+</aside>
+
+<main id="main">
+  <div class="wrap" id="view">
+    <div class="placeholder">
+      <h2>Was möchtest du lernen?</h2>
+      <p>Gib links ein Thema ein oder öffne eine gespeicherte Leseliste.</p>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = (sel) => document.querySelector(sel);
+const view = $("#view");
+const state = { running: false, activeFile: null, runStart: 0, timer: null, topic: "" };
+
+// ---------- Hilfsfunktionen ----------
+
+function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// Minimal-Markdown: **fett**, *kursiv*, `code`, [text](url), nackte URLs, Zeilenumbrüche
+function md(value) {
+  let s = esc(value);
+  s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>");
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2">$1</a>');
+  s = s.replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2">$2</a>');
+  s = s.replace(/\n/g, "<br>");
+  return s;
+}
+
+function asText(item) {
+  if (item == null) return "";
+  if (typeof item === "string") return item;
+  if (typeof item === "object") {
+    const title = item.title || item.name || item.term || item.question || "";
+    const rest = item.description || item.definition || item.focus || item.answer || "";
+    if (title && rest) return `**${title}:** ${rest}`;
+    return title || rest || JSON.stringify(item);
+  }
+  return String(item);
+}
+
+function list(items, cls = "") {
+  if (!Array.isArray(items) || !items.length) return "";
+  return `<ul class="${cls}">${items.map((i) => `<li>${md(asText(i))}</li>`).join("")}</ul>`;
+}
+
+function fmtNum(n) { return Number(n).toLocaleString("de-DE"); }
+function fmtTime(sec) {
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return m ? `${m}:${String(s).padStart(2, "0")} min` : `${s} s`;
+}
+
+const TYPE_LABELS = {
+  book: "Buch", blog: "Blog", tutorial: "Tutorial", documentation: "Doku",
+  course: "Kurs", paper: "Paper", repository: "Repository", video: "Video",
+};
+const PRIORITY_LABELS = { essential: "Wichtig", recommended: "Empfohlen", optional: "Optional" };
+
+// Links immer im Standardbrowser öffnen, nicht im Fenster
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("a[href]");
+  if (!a) return;
+  e.preventDefault();
+  const href = a.getAttribute("href");
+  if (/^https?:\/\//.test(href)) window.pywebview.api.open_url(href);
+});
+
+// ---------- Sidebar ----------
+
+async function refreshLists() {
+  const items = await window.pywebview.api.list_lists();
+  const box = $("#lists");
+  if (!items.length) {
+    box.innerHTML = '<div class="empty-list">Noch keine Leselisten gespeichert.</div>';
+    return;
+  }
+  box.innerHTML = items.map((it) => `
+    <button class="item ${it.file === state.activeFile ? "active" : ""}" data-file="${esc(it.file)}">
+      <div class="t">${esc(it.topic)}</div>
+      <div class="m">${esc(it.created)} · ${it.resources} Quellen</div>
+    </button>`).join("");
+  box.querySelectorAll(".item").forEach((el) =>
+    el.addEventListener("click", () => openList(el.dataset.file)));
+}
+
+async function openList(file) {
+  if (state.running) return;
+  try {
+    const result = await window.pywebview.api.load_list(file);
+    state.activeFile = file;
+    renderList(result);
+    refreshLists();
+  } catch (err) {
+    view.innerHTML = `<div class="error-box">Konnte die Datei nicht laden:\n${esc(err.message || err)}</div>`;
+  }
+}
+
+// ---------- Darstellung einer Leseliste ----------
+
+function renderResource(r) {
+  const prio = r.priority || "optional";
+  const title = r.url ? `<a href="${esc(r.url)}">${esc(r.title)}</a>` : esc(r.title);
+  const by = [
+    (r.authors || []).join(", "),
+    r.publisher,
+    r.year,
+  ].filter(Boolean).map(esc).join(" · ");
+
+  const sections = (r.recommended_sections || []).map((s) => `
+    <li><strong>${md(s.name)}</strong>${s.verified === false ? '<span class="unverified" title="Kapitelangabe nicht verifiziert">nicht verifiziert</span>' : ""}
+      ${s.focus ? `<div class="focus">${md(s.focus)}</div>` : ""}</li>`).join("");
+
+  const questions = (r.understanding_questions || []).map((q) => `
+    <details class="q">
+      <summary>${md(q.question)}</summary>
+      <div class="a">${md(q.answer)}</div>
+    </details>`).join("");
+
+  return `
+    <article class="card res">
+      <div class="res-top">
+        <span class="badge type">${esc(TYPE_LABELS[r.type] || r.type || "Quelle")}</span>
+        <span class="badge ${esc(prio)}">${esc(PRIORITY_LABELS[prio] || prio)}</span>
+        ${r.estimated_hours ? `<span class="hours">ca. ${esc(r.estimated_hours)} h</span>` : ""}
+      </div>
+      <h4>${title}</h4>
+      ${by ? `<div class="byline">${by}</div>` : ""}
+      ${r.reason ? `<p class="reason">${md(r.reason)}</p>` : ""}
+      ${sections ? `<div class="sub sections"><h5>Empfohlene Abschnitte</h5><ul class="sections">${sections}</ul></div>` : ""}
+      ${r.takeaways?.length ? `<div class="sub"><h5>Das solltest du mitnehmen</h5>${list(r.takeaways)}</div>` : ""}
+      ${r.practical_exercises?.length ? `<div class="sub"><h5>Praktische Übungen</h5>${list(r.practical_exercises)}</div>` : ""}
+      ${questions ? `<div class="sub"><h5>Verständnisfragen</h5>${questions}</div>` : ""}
+    </article>`;
+}
+
+function renderList({ data, path }) {
+  const phases = data.learning_path || [];
+  const resources = phases.flatMap((p) => p.resources || []);
+  const hours = resources.reduce((sum, r) => sum + (Number(r.estimated_hours) || 0), 0);
+
+  const toc = phases.map((p, i) =>
+    `<button data-target="phase-${i}">${esc(p.phase ?? i + 1)}. ${esc(p.title)}</button>`).join("");
+
+  const phaseHtml = phases.map((p, i) => `
+    <section class="phase" id="phase-${i}">
+      <div class="phase-head">
+        <div class="phase-num">${esc(p.phase ?? i + 1)}</div>
+        <h2>${esc(p.title)}</h2>
+      </div>
+      ${p.description ? `<p class="phase-desc">${md(p.description)}</p>` : ""}
+      ${(p.resources || []).map(renderResource).join("")}
+      ${p.milestone ? `<div class="milestone"><b>Meilenstein:</b> ${md(p.milestone)}</div>` : ""}
+    </section>`).join("");
+
+  const glossary = (data.glossary || []).map((g) =>
+    typeof g === "object"
+      ? `<dt>${esc(g.term || g.name)}</dt><dd>${md(g.definition || g.description || "")}</dd>`
+      : `<dt>${md(g)}</dt>`).join("");
+
+  const finalCards = [
+    data.final_project_ideas?.length ? `<div class="card"><h3>Abschlussprojekte</h3>${list(data.final_project_ideas)}</div>` : "",
+    data.further_exploration?.length ? `<div class="card"><h3>Weiterführend</h3>${list(data.further_exploration)}</div>` : "",
+  ].filter(Boolean).join("");
+
+  view.innerHTML = `
+    <div class="doc-head">
+      <h2>${esc(data.topic)}</h2>
+      <div class="meta-row">
+        <span>${phases.length} Phasen</span>
+        <span>${resources.length} Quellen</span>
+        ${hours ? `<span>ca. ${fmtNum(hours)} Stunden</span>` : ""}
+        <button id="toggleAnswers">Alle Antworten aufklappen</button>
+      </div>
+      ${data.introduction ? `<p class="intro">${md(data.introduction)}</p>` : ""}
+    </div>
+    <div class="cols">
+      ${data.learning_objectives?.length ? `<div class="card"><h3>Lernziele</h3>${list(data.learning_objectives)}</div>` : ""}
+      ${data.assumed_knowledge?.length ? `<div class="card"><h3>Vorwissen</h3>${list(data.assumed_knowledge)}</div>` : ""}
+    </div>
+    ${toc ? `<nav class="toc">${toc}</nav>` : ""}
+    ${phaseHtml}
+    ${finalCards || glossary ? `
+      <div class="final">
+        ${finalCards ? `<div class="cols">${finalCards}</div>` : ""}
+        ${glossary ? `<div class="card" style="margin-top:16px"><h3>Glossar</h3><dl class="glossary">${glossary}</dl></div>` : ""}
+      </div>` : ""}
+    <p class="meta-row" style="margin-top:40px">${esc(path)}</p>`;
+
+  $("#main").scrollTop = 0;
+  view.querySelectorAll(".toc button").forEach((b) =>
+    b.addEventListener("click", () => document.getElementById(b.dataset.target).scrollIntoView({ behavior: "smooth" })));
+
+  const toggle = $("#toggleAnswers");
+  toggle.addEventListener("click", () => {
+    const all = view.querySelectorAll("details.q");
+    const open = toggle.dataset.open !== "1";
+    all.forEach((d) => (d.open = open));
+    toggle.dataset.open = open ? "1" : "0";
+    toggle.textContent = open ? "Alle Antworten zuklappen" : "Alle Antworten aufklappen";
+  });
+}
+
+// ---------- Erstellung ----------
+
+function setRunning(running) {
+  state.running = running;
+  $("#startBtn").disabled = running;
+  $("#topic").disabled = running;
+  document.querySelectorAll(".item").forEach((el) => (el.disabled = running));
+  if (!running && state.timer) { clearInterval(state.timer); state.timer = null; }
+}
+
+function renderProgress(topic) {
+  view.innerHTML = `
+    <div class="progress">
+      <h2>Leseliste wird erstellt</h2>
+      <div class="topic">${esc(topic)}</div>
+      <div class="statusbar">
+        <div class="spinner"></div>
+        <div class="label" id="statusLabel">Claude wird gestartet …</div>
+        <div class="time" id="statusTime">0 s</div>
+        <button class="btn" id="cancelBtn">Abbrechen</button>
+      </div>
+      <ul class="log" id="log"></ul>
+    </div>`;
+  $("#cancelBtn").addEventListener("click", async () => {
+    $("#cancelBtn").disabled = true;
+    $("#statusLabel").textContent = "Wird abgebrochen …";
+    await window.pywebview.api.cancel();
+  });
+}
+
+async function startRun() {
+  const topic = $("#topic").value.trim();
+  if (!topic || state.running) { $("#topic").focus(); return; }
+  // Ansicht zuerst aufbauen, damit kein frühes Fortschritts-Event verloren geht
+  state.topic = topic;
+  state.activeFile = null;
+  state.runStart = Date.now();
+  setRunning(true);
+  renderProgress(topic);
+  refreshLists();
+  state.timer = setInterval(() => {
+    const t = $("#statusTime");
+    if (t) t.textContent = fmtTime(Math.floor((Date.now() - state.runStart) / 1000));
+  }, 500);
+  try {
+    await window.pywebview.api.start(topic);
+  } catch (err) {
+    setRunning(false);
+    view.innerHTML = `<div class="error-box">${esc(err.message || err)}</div>`;
+  }
+}
+
+// Wird von Python aufgerufen
+window.onProgress = (ev) => {
+  const label = $("#statusLabel");
+  if (!label) return;
+  if (ev.type === "status") {
+    label.textContent = `Claude ${ev.label} … ${fmtNum(ev.chars)} Zeichen`;
+  } else if (ev.type === "tool") {
+    const [kind, ...rest] = ev.text.split(":");
+    const value = rest.join(":").trim();
+    const li = document.createElement("li");
+    const isUrl = /^https?:\/\//.test(value);
+    li.innerHTML = `<span class="s">${ev.elapsed} s</span><span class="k">${esc(kind)}</span>
+      <span class="v">${isUrl ? `<a href="${esc(value)}">${esc(value)}</a>` : esc(value)}</span>`;
+    $("#log").appendChild(li);
+    label.textContent = kind === "Lese" ? "Claude liest eine Seite …" : "Claude recherchiert …";
+  } else if (ev.type === "done") {
+    label.textContent = `Fertig nach ${fmtTime(ev.elapsed)}, ${ev.turns} Schritte – speichere …`;
+  }
+};
+
+window.onFinished = async ({ file }) => {
+  setRunning(false);
+  $("#topic").value = "";
+  await openList(file);
+};
+
+window.onFailed = ({ message, cancelled }) => {
+  setRunning(false);
+  const box = cancelled
+    ? `<div class="note-box">Die Erstellung wurde abgebrochen.</div>`
+    : `<div class="error-box"><strong>Fehler:</strong>\n${esc(message)}</div>`;
+  view.innerHTML = `
+    <div class="progress">
+      <h2>${cancelled ? "Abgebrochen" : "Das hat nicht geklappt"}</h2>
+      <div class="topic">${esc(state.topic)}</div>
+      ${box}
+      <div style="margin-top:14px"><button class="btn" id="retryBtn">Erneut versuchen</button></div>
+    </div>`;
+  $("#retryBtn").addEventListener("click", () => { $("#topic").value = state.topic; startRun(); });
+  refreshLists();
+};
+
+// ---------- Start ----------
+
+$("#startBtn").addEventListener("click", startRun);
+$("#topic").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.ctrlKey || !e.shiftKey)) { e.preventDefault(); startRun(); }
+});
+$("#refreshBtn").addEventListener("click", refreshLists);
+$("#folderBtn").addEventListener("click", () => window.pywebview.api.open_folder());
+
+window.addEventListener("pywebviewready", refreshLists);
+</script>
+</body>
+</html>
