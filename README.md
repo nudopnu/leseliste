@@ -1,11 +1,24 @@
 # Leseliste 📖
 
-```bash
-uv init
-uv run leseliste "SAFE-Hair: Scalp-Anchored Fields for Exportable Single-View Hair Reconstruction"
+Nutzt die Claude-Code-CLI um eine Leseliste mit Verständnisfraagen zu einem gegebenen Thema zu erstellen.
+
+## Voraussetzungen
+
+Die Claude-Code-CLI
+
+```powershell
+irm https://claude.ai/install.ps1 | iex
 ```
 
+## Bennutzung
 
+```bash
+uv sync
+uv run leseliste-ui
+
+# cli
+uv run leseliste "SAFE-Hair: Scalp-Anchored Fields for Exportable Single-View Hair Reconstruction"
+```
 
 
 <details><summary>JSON Ausgabe</summary>
